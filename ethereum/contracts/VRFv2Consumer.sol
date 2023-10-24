@@ -28,6 +28,7 @@ contract VRFv2Consumer is VRFConsumerBaseV2 {
     // For a list of available gas lanes on each network,
     // see https://docs.chain.link/docs/vrf/v2/subscription/supported-networks/#configurations
     // 500 gwei Key Hash
+    // for poligon 0xcc294a196eeeb44da2888d17c0625cc88d70d9760a69d58d853ba6581a9ab0cd
     bytes32 keyHash =
         0xcc294a196eeeb44da2888d17c0625cc88d70d9760a69d58d853ba6581a9ab0cd;
 
@@ -126,7 +127,7 @@ contract VRFv2Consumer is VRFConsumerBaseV2 {
         RequestStatus memory request = s_requests[_requestId];
         return (request.fulfilled, request.randomWords);
     }
-////////////////////////////// new
+////////////////////////////// 
     function getCurrentRandom(uint _requestId) external view returns(uint256) {  
         RequestStatus memory request = s_requests[_requestId];
         return request.randomWords[0];
@@ -141,8 +142,7 @@ contract VRFv2Consumer is VRFConsumerBaseV2 {
     function getLastRequestId() external view returns(uint) {
         return lastRequestId;
     }
-    function closeRandom(uint _requestId) external {
+    function closeRandom(uint _requestId) external whiteList(msg.sender) {
         s_requests[_requestId].exists = false;
     }
-
 }

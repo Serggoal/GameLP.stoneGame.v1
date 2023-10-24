@@ -6,6 +6,7 @@ pragma solidity ^0.8.0;
 
 contract MainLP is IERC20 {
     address public owner;
+    bool private locked;
     uint public totalTokens;
     mapping(address => uint) balances;
     mapping(address => mapping(address => uint)) allowances;
@@ -24,6 +25,12 @@ contract MainLP is IERC20 {
 
         constructor() {
         owner = msg.sender;
+    }
+        modifier reentrancyGuard() {
+            require(!locked, "denied");
+            locked = true;
+            _;
+            locked = false;
     }
 
         modifier enoughTokens(address _from, uint _amount) {
@@ -140,7 +147,7 @@ contract MainLP is IERC20 {
     }
 
       // mint tokens for users   
-    function mint(address _player, uint amount) public {
+    function mint(address _player, uint amount) private {
 
         balances[_player] += amount;
         totalTokens += amount;
@@ -172,6 +179,7 @@ contract MainLP is IERC20 {
     // manually withdrawal 
     
     function rewardTokenHolders(address _tokenHolder, uint _withdrawTokens) public {
+        require(checkWhiteList(msg.sender) || msg.sender == _tokenHolder, "Only holders");
         require((_withdrawTokens / 10000) * 10000 >= 1, "too small");
         uint balanceUserTokens = balances[_tokenHolder];
         require(balanceUserTokens != 0, "You haven't tokens!");
@@ -186,6 +194,7 @@ contract MainLP is IERC20 {
         getBalance(); 
 
         emit Rewarding(receiver, payoutUser);
+        emit Transfer(_tokenHolder, address(0), _withdrawTokens);
     }
 
     // get Token price
@@ -212,7 +221,7 @@ contract MainLP is IERC20 {
 
     // the process of the game. The player receives the tokens
 
-    function gameplay(address _player, uint _userBet) public payable whiteList(msg.sender) {
+    function gameplay(address _player, uint _userBet) external payable whiteList(msg.sender) {
         uint tokensToGame = _userBet * degree / rateGame;
 
         uint ratePartnerFee = partnersRate[msg.sender];
@@ -244,6 +253,7 @@ contract MainLP is IERC20 {
         getBalance();
 
         emit GetBankFee(receiver, payoutBankFee);
+        emit Transfer(msg.sender, address(0), _payoutTokenBankFee);
     }
 
     ////// 
@@ -264,9 +274,10 @@ contract MainLP is IERC20 {
         getBalance();
 
         emit GetPartnerFee(receiver, payoutPartnerFee);
+        emit Transfer(_ownerPartner, address(0), _payoutPartnerTokenFee);
     }
-    // for Draw in game
-    function payReward(address _player, uint _reward) external {
+    // for Draw in game & win
+    function payReward(address _player, uint _reward) internal whiteList(msg.sender) reentrancyGuard {
         payable(_player).transfer(_reward);
         getBalance();
         emit RewardPlayer(_player, _reward);
@@ -277,5 +288,4 @@ contract MainLP is IERC20 {
 
     receive() external payable {
     }
-
 }

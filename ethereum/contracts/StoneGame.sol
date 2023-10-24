@@ -5,7 +5,7 @@ import "./IVRFv2Consumer.sol";
 
 pragma solidity ^0.8.0;
 
-//a simple rock-paper-scissors game
+// the rock-paper-scissors game
 
     contract StoneGame {
         address public owner;
@@ -74,8 +74,8 @@ pragma solidity ^0.8.0;
    // summing up the results
     function getGameStatus(uint256 _requestId) public {
         require(nextUser, "Wait next play!");
-        require(random_contract.existOrNot(_requestId), "request not found");
         require(msg.sender == addressPlayer || msg.sender == owner, "You aren't player. Wait in line!");
+        require(random_contract.existOrNot(_requestId), "request not found");
         require(random_contract.getFulfillStatus(_requestId), "Wait random!");
 
         currentRandomWord = random_contract.getCurrentRandom(_requestId);
@@ -93,7 +93,7 @@ pragma solidity ^0.8.0;
         random_contract.closeRandom(_requestId);
     }
 
-    function checkWinner(uint256 _userChoice, uint256 _botChoice) public pure returns(uint){
+    function checkWinner(uint256 _userChoice, uint256 _botChoice) private pure returns(uint){
 
           if(_userChoice == _botChoice){
               return 2;
@@ -104,7 +104,7 @@ pragma solidity ^0.8.0;
           return 0;
           }
 
-    function playGame(uint _result) internal {
+    function playGame(uint _result) private {
 
         uint rewardPlayer = userBet * 2;
 
