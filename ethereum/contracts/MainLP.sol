@@ -16,11 +16,9 @@ contract MainLP is IERC20 {
     string public symbol = "GAMELP";
     uint public contractBalance; 
     uint public rateBankFee = 2;
-    uint public sumPartnerToken;
-    uint public bankroll;
+    uint public bankroll;  // the biggest bet: contractBalance / bankroll
     uint public degree = 1000000000000000000; // 10**18
-    uint public rateGame = 500000000000000; // 0,0005 How many tokens (rate) mint for game
-    uint public rateDepo = 100000000000000; // 0,0001 How many tokens (rate) mint for depo
+    uint public rateGame = 5; // minting tokens's rate for player
 
 
         constructor() {
@@ -42,7 +40,7 @@ contract MainLP is IERC20 {
         require(msg.sender == owner, "Only an owner");
         _;
     }
-
+    // only verified contracts can interact with the pool
         modifier whiteList(address _partner) {
         require(checkWhiteList(_partner), "Not a partner!");
         _;
@@ -50,11 +48,8 @@ contract MainLP is IERC20 {
     
     event DepoMintTokens(address _player, uint userTokens); 
     event PlaygameMintTokens(address _player, uint userTokens);
-    event GetBankFee(address receiver, uint payoutBankFee);
-    event GetPartnerFee(address receiver, uint payoutPartnerFee);
     event RewardPlayer(address _player, uint _reward);
     event Rewarding(address receiver, uint rewardForPlayer);
-    
     
     function setBankroll(uint _bankroll) public onlyOwner {
        bankroll = _bankroll;
@@ -65,14 +60,6 @@ contract MainLP is IERC20 {
 
     function setPartner(address _partner) public onlyOwner {
        partner.push(_partner);
-    }
-
-    function setRateGame(uint _rateGame) public onlyOwner {
-      rateGame = _rateGame;
-    }
-
-    function setRateDepo(uint _rateDepo) public onlyOwner {
-      rateDepo = _rateDepo;
     }
 
     function checkWhiteList(address _partner) private view returns(bool) {
@@ -94,8 +81,21 @@ contract MainLP is IERC20 {
             }
         }
     }
+    // need first depo to start, just one transaction
+    function firstDepo() public payable {
+        uint firstPrice = 1000000000000000; // 10**15
+        require(totalTokens == 0, "Pool already started");
+        uint tokensForDepo = msg.value / firstPrice * degree;
+        uint userBankFee = msg.value / 100 * rateBankFee;
+     
+          mint(msg.sender, tokensForDepo);
+          (bool success, ) = owner.call{value: userBankFee}("");
+          require(success, "failed");
+        
+        emit DepoMintTokens(msg.sender, tokensForDepo);
+    }
 
-// set Partner rate for liquidity providing
+    // set Partner rate for liquidity providing
     function setPartnerRate(address _partner, uint _rate) public onlyOwner whiteList(_partner) {
        partnersRate[_partner] = _rate;
     }
@@ -103,9 +103,13 @@ contract MainLP is IERC20 {
        return partnersRate[_partner];
     }
 
-// set main Bank fee
+    // set main Bank fee
     function setRateBankFee(uint _rateBankFee) public onlyOwner {
       rateBankFee = _rateBankFee;
+    }
+
+    function setRateGame(uint _rateGame) public onlyOwner {
+      rateGame = _rateGame;
     }
 
     function getBalance() public {
@@ -156,26 +160,6 @@ contract MainLP is IERC20 {
         emit Transfer(address(0), _player, amount);
     }
 
-          // mint tokens for Bank
-    function mintBankToken(uint amount) private {
-
-        balances[owner] += amount;
-        totalTokens += amount;
-        getBalance();
-      
-        emit Transfer(address(0), owner, amount);
-    }
-    /// mint tokens for Partners
-    function mintPartnerToken(uint amount) private {
-
-        balances[msg.sender] += amount;
-        totalTokens += amount;
-        sumPartnerToken += amount;
-        getBalance();
-      
-        emit Transfer(address(0), msg.sender, amount);
-    }
-
     // manually withdrawal 
     
     function rewardTokenHolders(address _tokenHolder, uint _withdrawTokens) public {
@@ -189,96 +173,78 @@ contract MainLP is IERC20 {
         balances[_tokenHolder] -= _withdrawTokens;
         totalTokens -= _withdrawTokens;
 
-        address payable receiver = payable(_tokenHolder);
-        receiver.transfer(payoutUser);
+        (bool success, ) = _tokenHolder.call{value: payoutUser}("");
+        require(success, "failed");
         getBalance(); 
 
-        emit Rewarding(receiver, payoutUser);
+        emit Rewarding(_tokenHolder, payoutUser);
         emit Transfer(_tokenHolder, address(0), _withdrawTokens);
     }
 
     // get Token price
     function getTokenPrice() public view returns(uint256) {
-        return contractBalance * degree / totalTokens; 
+        return  contractBalance * degree / totalTokens; 
     }
 
-    // the process of delivering liquidity to the game. In return for liquidity, it receives tokens
+    // the process of providing liquidity to the game. In return for liquidity, it receives tokens
+    // only through Partner possible providing liquidity
 
     function depo(address _player) public payable whiteList(msg.sender) {
-        uint tokensForDepo = msg.value / rateDepo * degree;
-
+        uint currentPrice = getTokenPrice();
+        uint tokensForDepo = msg.value / currentPrice * degree;
         uint ratePartnerFee = partnersRate[msg.sender];
-        uint userTokenBankFee = tokensForDepo / 100 * rateBankFee;
-        uint userTokenPartnerFee = tokensForDepo / 100 * ratePartnerFee;
-        uint userTokens = tokensForDepo - userTokenBankFee - userTokenPartnerFee;
+        uint userBankFee = msg.value / 100 * rateBankFee;
+        uint userPartnerFee = msg.value / 100 * ratePartnerFee;
+
+        (bool success, ) = owner.call{value: userBankFee}("");
+        require(success, "failed");
+        (bool success2, ) = msg.sender.call{value: userPartnerFee}("");
+        require(success2, "failed2");
      
-          mint(_player, userTokens);
-          mintBankToken(userTokenBankFee);
-          mintPartnerToken(userTokenPartnerFee); 
+          mint(_player, tokensForDepo);
         
-        emit DepoMintTokens(_player, userTokens);
+        emit DepoMintTokens(_player, tokensForDepo);
     }
 
     // the process of the game. The player receives the tokens
 
     function gameplay(address _player, uint _userBet) external payable whiteList(msg.sender) {
-        uint tokensToGame = _userBet * degree / rateGame;
+        uint currentGamePrice = getTokenPrice();
+        uint tokensToGame = _userBet * degree / currentGamePrice * degree / rateGame / degree;
 
         uint ratePartnerFee = partnersRate[msg.sender];
-        uint userTokenBankFee = tokensToGame / 100 * rateBankFee;
-        uint userTokenPartnerFee = tokensToGame / 100 * ratePartnerFee;
-        uint userTokens = tokensToGame - userTokenBankFee - userTokenPartnerFee;
+        uint userBankFee = _userBet / 100 * rateBankFee;
+        uint userPartnerFee = _userBet / 100 * ratePartnerFee;
+      
+        (bool success, ) = owner.call{value: userBankFee}("");
+        require(success, "failed");
+        (bool success2, ) = msg.sender.call{value: userPartnerFee}("");
+        require(success2, "failed2");
      
-          mint(_player, userTokens);
-          mintBankToken(userTokenBankFee);
-          mintPartnerToken(userTokenPartnerFee); 
+        mint(_player, tokensToGame);
         
-        emit PlaygameMintTokens(_player, userTokens);
+        emit PlaygameMintTokens(_player, tokensToGame);
     }
 
-    //////
-    function getBankFee(uint _payoutTokenBankFee) public onlyOwner {
-        require((_payoutTokenBankFee / 10000) * 10000 >= 1, "too small");
-        uint currentAmountBankTokens = balances[owner];
-        require(currentAmountBankTokens != 0, "BankFee is empty!");
-        require(_payoutTokenBankFee <= currentAmountBankTokens, "BankFee is lower!");
+    // payments in game for Win
+    function payRewardWin(address _player, uint _reward) external whiteList(msg.sender) reentrancyGuard {
+        uint ratePartnerFee = partnersRate[msg.sender];
+        uint userBankFee = _reward / 100 * rateBankFee;
+        uint userPartnerFee = _reward / 100 * ratePartnerFee;
 
-        uint payoutBankFee = _payoutTokenBankFee * contractBalance / totalTokens;
+        (bool success, ) = owner.call{value: userBankFee}("");
+        require(success, "failed");
+        (bool success2, ) = msg.sender.call{value: userPartnerFee}("");
+        require(success2, "failed2");
 
-        balances[owner] -= _payoutTokenBankFee;
-        totalTokens -= _payoutTokenBankFee;
-        
-        address payable receiver = payable(msg.sender);
-        receiver.transfer(payoutBankFee);
         getBalance();
-
-        emit GetBankFee(receiver, payoutBankFee);
-        emit Transfer(msg.sender, address(0), _payoutTokenBankFee);
+        emit RewardPlayer(_player, _reward);
     }
 
-    ////// 
-    function getPartnerFee(uint _payoutPartnerTokenFee, address _ownerPartner) public whiteList(msg.sender) {
-        require((_payoutPartnerTokenFee / 10000) * 10000 >= 1, "too small");
-        uint currentAmountPartnerTokens = balances[msg.sender];
-        require(currentAmountPartnerTokens != 0, "PartnerTokenFee is empty!");
-        require(_payoutPartnerTokenFee <= currentAmountPartnerTokens, "PartnerTokenFee is lower!");
-
-        uint payoutPartnerFee = _payoutPartnerTokenFee * contractBalance / totalTokens;
-
-        balances[msg.sender] -= _payoutPartnerTokenFee;
-        sumPartnerToken -= _payoutPartnerTokenFee;
-        totalTokens -= _payoutPartnerTokenFee;
-        
-        address payable receiver = payable(_ownerPartner);
-        receiver.transfer(payoutPartnerFee);
-        getBalance();
-
-        emit GetPartnerFee(receiver, payoutPartnerFee);
-        emit Transfer(_ownerPartner, address(0), _payoutPartnerTokenFee);
-    }
-    // for Draw in game & win
-    function payReward(address _player, uint _reward) internal whiteList(msg.sender) reentrancyGuard {
-        payable(_player).transfer(_reward);
+    // payments in game for Draw
+    function payRewardDraw(address _player, uint _reward) external whiteList(msg.sender) reentrancyGuard {
+        (bool success, ) = _player.call{value: _reward}("");
+        require(success, "failed");
         getBalance();
         emit RewardPlayer(_player, _reward);
     }

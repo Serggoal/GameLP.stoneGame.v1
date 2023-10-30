@@ -15,8 +15,7 @@ interface InterfaceMainLP {
 
     function gameplay(address _player, uint _userBet) external payable;
 
-    function getPartnerFee(uint _partnerFee, address owner) external;
+    function payRewardWin(address _player, uint _reward) external;
 
-    function payReward(address _player, uint _reward) external;
-
+    function payRewardDraw(address _player, uint _reward) external;
 }
