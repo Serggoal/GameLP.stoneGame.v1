@@ -1499,7 +1499,7 @@ const Index = () => {
             const tokenPrice = await contract.getTokenPrice();
             const tokenPrice2= ethers.formatEther(tokenPrice);
             setTokenPrice(tokenPrice2.toString());
-            
+
             setOpenPortal20(false);
             const tx = await contractGameSinger.getGameStatus(lastRandomId);
             setOpenPortal(true);
@@ -1592,12 +1592,18 @@ useEffect(() => {
       if(depo < minDepo) {
         setModalContent('Incorrect sum. Need more than or equal to 1');
         setOpenModal(true);
+        setIsActiveShowButton(false);
+        setHuman("");
+        setBot("");
+        setResult("");
+        setResultColor("grey");
+        setResultIcon("game");
+        setIsShowResult(false);
       } else {
         try {
           const tokenPrice = await contract.getTokenPrice();
           const tokenPrice2= ethers.formatEther(tokenPrice);
           setTokenPrice(tokenPrice2.toString());
-          
           let tx = await contractGameSinger.depo({
             value: ethers.parseEther(depo),
           });

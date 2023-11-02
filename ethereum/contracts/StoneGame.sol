@@ -16,6 +16,7 @@ pragma solidity ^0.8.0;
         uint public botChoice;
         uint public rate;
         bool public nextUser;
+        uint public roundWinner;
 
         IVRFv2Consumer random_contract;   // interaction with Chainlink
         InterfaceMainLP main_contract;    // interaction with main pool
@@ -77,7 +78,6 @@ pragma solidity ^0.8.0;
 
         uint currentRandomWord = random_contract.getCurrentRandom(_requestId);
         uint randomNumber = currentRandomWord % rate;
-        uint roundWinner;
 
            if(randomNumber <= 2) {
             botChoice = randomNumber;

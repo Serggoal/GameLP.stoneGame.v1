@@ -4,12 +4,12 @@ import { useState, useEffect } from "react";
 const HeaderUp = (props) => {
 
   const [overviewGame, setOverviewGame] = useState("Welcome!!!");
-  const [overviewGame2, setOverviewGame2] = useState("Connect Metamask (Poligon)");
+  const [overviewGame2, setOverviewGame2] = useState("Connect Metamask (Polygon)");
 
   useEffect(() => {
     (async () => {
     if(props.isConnected) {
-      setOverviewGame("Play in game!");  
+      setOverviewGame("Play in game with Chainlink!");  
       setOverviewGame2("Deposit or bet and win x2!")  
   }
     })();
